@@ -5,8 +5,6 @@ from wikidata_api_ranking import get_entities
 
 def flag(cfg, key, default="True"):
     return cfg.get(key, default).lower() == "true"
-def get_weights(cfg):
-    return tuple(float(x) for x in cfg.get("CEA_WEIGHTS", "0.5,0.2,0.3").split(","))
 def use_llm(gate, scored, margin):
     if len(scored) <= 1:
         return False
@@ -36,7 +34,6 @@ def annotate(ctx):
     use_slm_cta = flag(cfg, "CTA_USE_SLM")
     use_slm_cpa = flag(cfg, "CPA_USE_SLM")
     cta_from_sel = flag(cfg, "CTA_FROM_SELECTION")
-    weights = get_weights(cfg)
     cta_margin = float(cfg.get("CTA_MARGIN", "0.3"))
     cta_topk = int(cfg.get("CTA_TOPK", "5"))
     allow_nil = flag(cfg, "ALLOW_NIL", "False")
@@ -48,7 +45,7 @@ def annotate(ctx):
     if "cea" in ctx.tasks or "cpa" in ctx.tasks:
         for (r, c), cands in ctx.cells.items():
             # Try to resolve with context tiebreak first, then LLM if needed
-            scored = cea_mod.rank_cell(cands, ctx.type_pct.get(c, {}), weights)
+            scored = cea_mod.rank_cell(cands, ctx.type_pct.get(c, {}))
             if not scored:
                 if allow_nil and "cea" in ctx.tasks:
                     ctx.writer.add_cea(ctx.tab_id, r, c, nil_label)

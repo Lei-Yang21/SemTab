@@ -4,6 +4,14 @@ import pandas as pd
 
 from wikidata_api_ranking import get_entities
 
+def build_type_pct(cta_result):
+    out = {}
+    for col_id, p31, p279 in cta_result:
+        merged = dict(p31)
+        for q, pct in p279.items():
+            merged[q] = max(merged.get(q, 0.0), 0.5 * pct)
+        out[col_id] = merged
+    return out
 # Function to build the percentages of cover for each type in the CTA results 
 def cta_from_cea(cea_df):
     results = []

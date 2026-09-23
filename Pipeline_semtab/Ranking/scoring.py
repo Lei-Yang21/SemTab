@@ -1,8 +1,14 @@
-import math
+def inverse_quality(quality):
+    return 1.0 / quality
+
+def identity_quality(quality):
+    return float(quality)
+
+QUALITY_METHODS = {"inverse": inverse_quality, "identity": identity_quality}
 
 class Scoring_method:
-    def __init__(self):
-        pass
+    def __init__(self, quality_function=None):
+        self.quality_function = quality_function if quality_function is not None else inverse_quality
     #Levenshtein distance minimum number of edits to transform one string into another
     def levenshtein_distance(self, s1, s2):
         if len(s1) < len(s2):
@@ -42,9 +48,9 @@ class Scoring_method:
     def quality_score(self, quality):
         try:
             q = int(quality)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return 0.0
-        return 1.0 / q if q > 0 else 0.0
+        return self.quality_function(q) if q > 0 else 0.0
 
     def best_string_sim(self, mention, label, aliases=None):
         best = max(self.levenshtein_similarity(mention, label),self.token_jaccard(mention, label))

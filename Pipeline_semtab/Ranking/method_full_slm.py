@@ -4,21 +4,18 @@ from method_base import run_cpa
 
 def flag(cfg, key, default="True"):
     return cfg.get(key, default).lower() == "true"
-def get_weights(cfg):
-    return tuple(float(x) for x in cfg.get("CEA_WEIGHTS", "0.5,0.2,0.3").split(","))
 def annotate(ctx):
     cfg = ctx.config
     use_verify = flag(cfg, "LLM_VERIFY")
     use_slm_cpa = flag(cfg, "CPA_USE_SLM")
     topk = int(cfg.get("LLM_TOPK", "10"))
     cta_from_sel = flag(cfg, "CTA_FROM_SELECTION")
-    weights = get_weights(cfg)
     cta_topk = int(cfg.get("CTA_TOPK", "5"))
 
     if "cea" in ctx.tasks or "cpa" in ctx.tasks:
         items = []
         for (r, c), cands in ctx.cells.items():
-            scored = rank_cell(cands, ctx.type_pct.get(c, {}), weights)
+            scored = rank_cell(cands, ctx.type_pct.get(c, {}))
             top = [cc for _, cc in scored[:topk]]
             if not top:
                 continue

@@ -4,8 +4,6 @@ from method_base import run_cpa
 
 def flag(cfg, key, default="True"):
     return cfg.get(key, default).lower() == "true"
-def get_weights(cfg):
-    return tuple(float(x) for x in cfg.get("CEA_WEIGHTS", "0.5,0.2,0.3").split(","))
 def annotate(ctx):
     cfg = ctx.config
     use_slm_cea = flag(cfg, "CEA_USE_SLM")
@@ -15,7 +13,6 @@ def annotate(ctx):
     margin = float(cfg.get("CEA_TIEBREAK_MARGIN", "0.05"))
     ctx_tiebreak = flag(cfg, "CEA_CONTEXT_TIEBREAK", "False")
     ctx_margin = float(cfg.get("CEA_CONTEXT_MARGIN", "0.10")) if ctx_tiebreak else 0.0
-    weights = get_weights(cfg)
     cea_llm_topk = int(cfg.get("CEA_LLM_TOPK", "5"))
     cta_margin = float(cfg.get("CTA_MARGIN", "0.3"))
     cta_topk = int(cfg.get("CTA_TOPK", "5"))
@@ -29,7 +26,7 @@ def annotate(ctx):
             qid = cea_mod.choose_cea(
                 cands, ctx.type_pct.get(c, {}), llm=ctx.llm, use_slm=use_slm_cea,
                 margin=margin, row_context=ctx.row_context(r),
-                col_header=ctx.col_header(c), weights=weights,
+                col_header=ctx.col_header(c),
                 row_terms=row_terms, context_margin=ctx_margin,
                 llm_topk=cea_llm_topk, allow_nil=allow_nil,
                 nil_label=nil_label, nil_threshold=nil_threshold,

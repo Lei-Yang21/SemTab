@@ -1,20 +1,20 @@
 import re
 from data_loader import (load_candidates, load_preprocess, group_by_cell,candidate_columns, tab_id_from_filename)
-from cea import build_type_pct
-from cta import cta_from_cea, cta_from_selection
+from cta import build_type_pct, cta_from_cea, cta_from_selection
+from scoring_method import build_scorer
 from wikidata_api_ranking import get_entities
 import cpa as cpa_mod
 
 
 class TableContext:
 
-    def __init__(self, input_path, preprocess_path, config, llm, writer):
+    def __init__(self, input_path, preprocess_path, config, llm, writer, scorer=None):
         self.tab_id = tab_id_from_filename(input_path)
         self.cand_df = load_candidates(input_path)
         self.data_df, self.cta_cols, self.cpa_pairs = load_preprocess(preprocess_path)
         self.n_rows = self.data_df.shape[0]
 
-        self.cells = group_by_cell(self.cand_df)           
+        self.cells = group_by_cell(self.cand_df)
         self.cand_cols = candidate_columns(self.cand_df)    
         self.cta_result = cta_from_cea(self.cand_df)        
         self.cta_by_col = {c: (c, p31, p279) for c, p31, p279 in self.cta_result}
@@ -28,6 +28,9 @@ class TableContext:
         self.tasks = {t.strip().lower()for t in config.get("TASKS", "cea,cta,cpa").split(",") if t.strip()}
         self._type_label = {}
         self._final_label = {}
+        self.scorer = scorer if scorer is not None else build_scorer(config, llm)
+        self.scored_df = self.scorer.score(self.cand_df, self) if self.tasks & {"cea", "cpa"} else self.cand_df
+        self.cells = group_by_cell(self.scored_df)
 
     def rebuild_cta_from_selection(self):
         res = cta_from_selection(self.cand_df, self.cea_choice)

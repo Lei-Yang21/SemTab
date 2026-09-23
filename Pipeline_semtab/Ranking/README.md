@@ -19,7 +19,8 @@ On the SLURM cluster, each `Job/job_ranking_<experiment>.sh` script runs all con
 - `method_slm_context.py` — gated LLM selection with table context; the LLM is only called when the heuristic score margin is below a threshold (`LLM_GATE`, `LLM_CONTEXT_MARGIN`).
 - `method_base.py` — shared `TableContext` (cells, headers, tasks), the `rebuild_cta_from_selection` logic and common CPA logic.
 - `cea.py` / `cta.py` / `cpa.py` — task-specific scoring: candidate scoring per cell, column-type voting from CEA results, property matching from Wikidata claims.
-- `scoring.py` — string/quality/type-coherence metrics (Levenshtein, Jaccard, etc.) combined with the weights `DEFAULT_WEIGHTS = (0.5, 0.2, 0.3)` defined in `cea.py` (similarity, quality, type coherence). Those weights and the tie-break margin were fitted in `Utils/weights_margin.ipynb`.
+- `scoring.py` — string/quality/type-coherence metrics (Levenshtein, Jaccard, etc.) and quality transformations.
+- `scoring_method.py` — DataFrame scoring interface (`ScoringMethod`) and the weighted heuristic (`HeuristicScorer`). Default weights `(0.5, 0.2, 0.3)` correspond to similarity, quality and type coherence; these weights and the tie-break margin were fitted in `Utils/weights_margin.ipynb`.
 - `llm_code_ranking.py` — `LLMEngine`: HuggingFace model loading (optional LoRA adapter via `ADAPTER_PATH`), prompt templates (overridable via `CONTEXT_PROMPT`, `CTA_PROMPT`, `CPA_PROMPT`), greedy decoding by default, optional CoT and self-consistency sampling.
 - `data_loader.py` — reads candidate CSVs and preprocessing files (incl. the CTA/CPA metadata header).
 - `output_writer.py` — writes `cea.csv`, `cta.csv`, `cpa.csv` in the SemTab submission format (URIs, row offset).
@@ -28,6 +29,71 @@ On the SLURM cluster, each `Job/job_ranking_<experiment>.sh` script runs all con
 - `wikidata_cache.json` — leftover label cache from an earlier run; no code in this folder reads it (the API client is cacheless), it is kept only to avoid re-querying the API from the analysis notebooks.
 - `config/` — the experiment groups, one subfolder each. See its README.
 - `Job/` — one SLURM script per group, plus `job_relaunch_fail.sh`, a one-config scratch script kept to re-run a config that failed mid-sweep.
+
+## Scoring methods
+
+```python
+from scoring_method import build_scorer
+
+scorer = build_scorer(config)
+scored_df = scorer.score(candidates_df)
+```
+
+`score` returns a copy of the candidate DataFrame with a numeric `score` column.
+It preserves the input rows, columns, index and order. Higher scores rank first.
+Empty inputs return an empty DataFrame with a `score` column.
+
+`rank_folder` creates the scorer once per run. `TableContext` calls it once per
+table when CEA or CPA is requested, passing itself as the optional `context`.
+This provides the table data, headers, row context and per-column `type_pct`.
+The resulting `scored_df` supplies the scores used by all three ranking methods
+for sorting, shortlists and margins. `METHOD` still selects the annotation flow;
+`SCORING_METHOD` selects how candidates are scored.
+
+Existing configurations retain these defaults:
+
+```text
+SCORING_METHOD:heuristic
+CEA_FEATURES:string,quality,type
+CEA_WEIGHTS:0.5,0.2,0.3
+CEA_QUALITY_METHOD:inverse
+```
+
+`inverse` uses `1 / quality` for positive quality ranks, otherwise zero.
+`identity` uses the positive rank directly. Other transforms can be registered
+in `scoring.QUALITY_METHODS`. Weights are not normalized and must match the
+number and order of features. For example, `CEA_FEATURES:string,type` and
+`CEA_WEIGHTS:0.7,0.3` remove the quality component.
+
+To add a different heuristic, an ML scorer or an LLM scorer, subclass
+`ScoringMethod` and implement `_score(candidates_df, context)`. Return one finite
+number per row as a list, array or Series; a Series must preserve the input
+index and order. The base class validates the scores and builds the DataFrame.
+
+```python
+from scoring_method import ScoringMethod, SCORING_METHODS
+
+class QualityScorer(ScoringMethod):
+    def _score(self, candidates_df, context):
+        quality = candidates_df["quality"].astype(float)
+        return 1.0 / quality.where(quality > 0, float("inf"))
+
+SCORING_METHODS["quality"] = QualityScorer
+```
+
+Register the class before calling `rank_folder` and set `SCORING_METHOD:quality`.
+Constructors receive `config` and `llm`; an ML scorer can load its model once in
+`__init__`. A scorer that needs the existing LLM engine sets `requires_llm = True`
+and accesses `self.llm`. Only `HeuristicScorer` is supplied as a built-in method.
+
+Direct calls to `score_candidate`, `rank_cell` and `choose_cea` accept a scorer
+through `scorer=`. Otherwise they reuse scores already attached to candidates,
+or apply the default heuristic with the supplied weights to unscored candidates.
+`HeuristicScorer` also works without context, deriving type coverage from the
+candidate DataFrame.
+
+Run `python -m unittest discover -s tests -v` from the repository root. Scoring
+tests use local fixtures and mocked LLM calls, without loading a model.
 
 ## NIL answers (`ALLOW_NIL`)
 

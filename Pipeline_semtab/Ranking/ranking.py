@@ -4,6 +4,7 @@ from output_writer import OutputWriter
 from logger_ranking import log_vram, reset_peaks, log_tokens, reset_tokens, set_run_name
 from wikidata_api_ranking import set_rate_limit
 from method_base import TableContext
+from scoring_method import build_scorer, get_scoring_method
 import method_limited_slm as m_limited_slm
 import method_full_slm as m_full_slm
 import method_slm_context as m_slm_context
@@ -11,7 +12,7 @@ import method_slm_context as m_slm_context
 def annotator(method):
     return {"full_slm": m_full_slm.annotate,"slm_context": m_slm_context.annotate}.get(method, m_limited_slm.annotate)
 def needs_llm(config, method):
-    if method in ("full_slm", "slm_context"):
+    if method in ("full_slm", "slm_context") or get_scoring_method(config).requires_llm:
         return True
     flags = ("CEA_USE_SLM", "CTA_USE_SLM", "CPA_USE_SLM")
     return any(config.get(f, "True").lower() == "true" for f in flags)
@@ -42,6 +43,7 @@ def rank_folder(config):
         llm = LLMEngine(config)
         log_vram("model_loaded")
 
+    scorer = build_scorer(config, llm)
     annotate = annotator(method)
     print(f"Method: {method}")
 
@@ -54,7 +56,7 @@ def rank_folder(config):
             print(f"Preprocess file missing for {filename}, skipping.")
             continue
         print(f"Ranking {filename}")
-        ctx = TableContext(input_path, preprocess_path, config, llm, writer)
+        ctx = TableContext(input_path, preprocess_path, config, llm, writer, scorer)
         llm_calls += annotate(ctx) or 0
         if llm is not None:
             log_tokens(filename)

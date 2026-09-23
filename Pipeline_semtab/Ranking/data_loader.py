@@ -29,7 +29,7 @@ def load_candidates(path):
     df["columns"] = df["columns"].astype(int)
     return df
 def cand_dict(row):
-    return {
+    cand = {
         "qid": row["QID"] if pd.notna(row["QID"]) else None,
         "label": str(row["candidates"]) if pd.notna(row["candidates"]) else "",
         "mention": str(row["data"]) if pd.notna(row["data"]) else "",
@@ -39,6 +39,16 @@ def cand_dict(row):
         "P31": split_pipe(row.get("P31")),
         "P279": split_pipe(row.get("P279")),
     }
+    if "score" in row:
+        cand["score"] = float(row["score"])
+    return cand
+
+def candidates_frame(cands):
+    rows = [{"QID": c["qid"], "candidates": c["label"], "data": c["mention"],
+             "quality": c["quality"], "description": c.get("description", ""),
+             "aliases": c["aliases"], "P31": "|".join(c["P31"]),
+             "P279": "|".join(c["P279"]), "row": 0, "columns": 0} for c in cands]
+    return pd.DataFrame(rows)
 def group_by_cell(cand_df):
     cells = {}
     for (r, c), g in cand_df.groupby(["row", "columns"]):

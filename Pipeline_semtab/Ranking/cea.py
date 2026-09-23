@@ -1,27 +1,24 @@
 from scoring import Scoring_method
+from scoring_method import DEFAULT_WEIGHTS, HeuristicScorer
+from data_loader import candidates_frame
+from cta import build_type_pct
+from types import SimpleNamespace
 
 _score = Scoring_method()
 
-# weights for (string similarity, Wikidata quality, type coherence)
-DEFAULT_WEIGHTS = (0.5, 0.2, 0.3)
-# Per-column {QID: score} merging P31 and half-weighted P279 coverage (max of the two)
-def build_type_pct(cta_result):
-    out = {}
-    for col_id, p31, p279 in cta_result:
-        merged = dict(p31)
-        for q, pct in p279.items():
-            merged[q] = max(merged.get(q, 0.0), 0.5 * pct)
-        out[col_id] = merged
-    return out
-def score_candidate(cand, type_pct, weights=DEFAULT_WEIGHTS):
-    a, b, c = weights
-    aliases = cand["aliases"].split("|") if cand["aliases"] else None
-    sim = _score.best_string_sim(cand["mention"], cand["label"], aliases)
-    q = _score.quality_score(cand["quality"])
-    tc = _score.type_coherence(cand["P31"] + cand["P279"], type_pct)
-    return a * sim + b * q + c * tc
-def rank_cell(cands, type_pct, weights=DEFAULT_WEIGHTS):
-    scored = [(score_candidate(c, type_pct, weights), c) for c in cands if c["qid"]]
+def cell_scores(cands, type_pct, weights, scorer):
+    if scorer is None and all("score" in c for c in cands):
+        return [c["score"] for c in cands]
+    if scorer is None:
+        scorer = HeuristicScorer({"CEA_WEIGHTS": ",".join(str(w) for w in weights)})
+    context = SimpleNamespace(type_pct={0: type_pct})
+    return scorer.score(candidates_frame(cands), context)["score"].tolist()
+
+def score_candidate(cand, type_pct, weights=DEFAULT_WEIGHTS, scorer=None):
+    return cell_scores([cand], type_pct, weights, scorer)[0]
+def rank_cell(cands, type_pct, weights=DEFAULT_WEIGHTS, scorer=None):
+    cands = [c for c in cands if c["qid"]]
+    scored = list(zip(cell_scores(cands, type_pct, weights, scorer), cands))
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored
 def cand_text(cand):
@@ -38,8 +35,8 @@ def context_tiebreak(scored, row_terms, context_margin):
             return best_c["qid"]
     return None
     #Value for context_margin is set higher than the LLM margin because of the cost to call the first 
-def choose_cea(cands, type_pct, llm=None, use_slm=True, margin=0.05,row_context="", col_header="", weights=DEFAULT_WEIGHTS,row_terms=None, context_margin=0.1, llm_topk=5,allow_nil=False, nil_label="NIL", nil_threshold=0.0, nil_review=0.0):
-    scored = rank_cell(cands, type_pct, weights)
+def choose_cea(cands, type_pct, llm=None, use_slm=True, margin=0.05,row_context="", col_header="", weights=DEFAULT_WEIGHTS,row_terms=None, context_margin=0.1, llm_topk=5,allow_nil=False, nil_label="NIL", nil_threshold=0.0, nil_review=0.0, scorer=None):
+    scored = rank_cell(cands, type_pct, weights, scorer)
     if not scored:
         return nil_label if allow_nil else None
     top_score = scored[0][0]
