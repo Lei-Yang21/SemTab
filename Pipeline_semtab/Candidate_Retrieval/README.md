@@ -17,7 +17,7 @@ python main_candidate.py config/config_test_finetuning/config_lora.txt
   - `LLMGenerator` (quality 2) — the LLM proposes alternative surface forms/labels, each of which is then searched; optional self-consistency sampling (`LLM_SELF_CONSISTENCY`).
   - `FuzzyGenerator` (quality 3) — deterministic surface variants (quotes and parentheses stripped, leading article removed, `"Last, First"` reordered, split on `-` / `/`, first-word and first-two-word prefixes), each searched separately. Off by default.
 - `enrichment.py` — fetches description, aliases, P31/P279 types and sitelink count for each candidate QID (features used by the ranking scorer).
-- `llm_code.py` — HuggingFace LLM engine (prompt templates, batching, optional LoRA adapter via `ADAPTER_PATH`).
+- `../common/generation.py` — shared generation backend (chat formatting, batching, optional LoRA/4-bit loading and token accounting). Retrieval keeps a default context length of 2048.
 - `wikidata_api.py` — rate-limited Wikidata API client with retry/backoff and caching.
 - `logger_candidate_retrieval.py` — cost logging for the LLM generator: per-table GPU memory and prompt/generated token counts. Both files are written to the `log_candidate_retrieval/` folder, created on the first write, and are named after the run's `OUTPUT_FOLDER` (`vram_log_candidate_retrieval_<output folder>.csv`, `token_log_candidate_retrieval_<output folder>.csv`), so successive variants do not mix into one file; setting `LOG_DIR` moves the folder, and `VRAM_LOG_FILE` / `TOKEN_LOG_FILE` override the full path. Token rows carry the per-table delta and the running total. Nothing is logged when `USE_LLM` is off (no `MODEL_NAME`): the stage is then pure API search.
 - `config/` — the experiment groups, one subfolder each. See its README.
@@ -109,6 +109,13 @@ default enabled state. They may return `None` when unavailable, as the LLM
 factory does without an engine. `SearchGenerator` and `build_generators` accept
 an optional `search(query, language, limit)` function to replace Wikidata search.
 An unrecognized generator name is warned about and skipped, as before.
+
+`LLMGenerator` uses the same `GenerationEngine.generate` interface as ranking
+and the direct baseline. Select a registered backend with `GENERATION_ENGINE`
+(default `huggingface`), or pass an initialized engine to
+`candidate_retrieval_folder(folder, config, engine=engine)`. See
+[shared generation](../common/README.md) for the backend contract. The generator
+retains its term parsing, suggestion limits and self-consistency vote.
 
 ## Result
 

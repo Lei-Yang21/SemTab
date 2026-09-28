@@ -1,5 +1,8 @@
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from candidate_retrieval import candidate_retrieval_folder
 
 def load_config(path):

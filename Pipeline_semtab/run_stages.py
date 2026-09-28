@@ -3,6 +3,7 @@ import sys
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(BASE_DIR))
 for stage in ("Preprocessing", "Candidate_Retrieval", "Ranking"):
     sys.path.insert(0, os.path.join(BASE_DIR, stage))
 

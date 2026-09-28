@@ -5,6 +5,7 @@ import time
 # Stage modules import their siblings as top-level modules (e.g. "from ranking import ..."),
 # so each stage folder must be on sys.path. Module names are unique across stages.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(BASE_DIR))
 for stage in ("Preprocessing", "Candidate_Retrieval", "Ranking"):
     sys.path.insert(0, os.path.join(BASE_DIR, stage))
 

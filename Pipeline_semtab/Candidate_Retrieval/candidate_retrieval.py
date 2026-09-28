@@ -5,7 +5,7 @@ import pandas as pd
 
 from enrichment import enrich_rows, ENRICHMENT_COLUMNS
 from generators import build_generators
-from logger_candidate_retrieval import log_vram, reset_peaks, log_tokens, reset_tokens, set_run_name
+from logger_candidate_retrieval import log_vram, reset_peaks, log_tokens, reset_tokens, set_run_name, add_tokens
 import wikidata_api
 
 QUALITY_MERGES = {"first": lambda old, new: old, "min": min, "max": max}
@@ -96,7 +96,7 @@ def candidate_retrieval_file(input_file, generators, max_candidates=0, output_fo
     else:
         output_file = input_file.replace(".csv", "_candidates.csv")
     df_out.to_csv(output_file, index=False)
-def candidate_retrieval_folder(folder, config):
+def candidate_retrieval_folder(folder, config, engine=None):
     wikidata_api.set_rate_limit(config.get("API_SLEEP", "0.05"))
     max_candidates = int(config.get("MAX_CANDIDATES_PER_CELL", "0"))
     duplicate_quality = config.get("DUPLICATE_QUALITY", "first").strip().lower()
@@ -109,17 +109,15 @@ def candidate_retrieval_folder(folder, config):
     language = config.get("LANGUAGE", "en")
     emit_empty = str(config.get("EMIT_EMPTY_CELLS", "false")).strip().lower() == "true"
 
-    engine = None
     use_llm = str(config.get("USE_LLM", "true")).strip().lower() == "true"
     model_name = config.get("MODEL_NAME", "").strip()
-    adapter_path = config.get("ADAPTER_PATH", None)
-    load_in_4bit = str(config.get("LOAD_IN_4BIT", "false")).strip().lower() == "true"
+    backend = config.get("GENERATION_ENGINE", "huggingface").strip().lower()
 
-    if use_llm and model_name and model_name != "?":
-        from llm_code import LLMEngine
+    if engine is None and use_llm and (backend != "huggingface" or model_name and model_name != "?"):
+        from Pipeline_semtab.common.generation import build_generation_engine
         reset_peaks()
         reset_tokens()
-        engine = LLMEngine(model_name, adapter_path=adapter_path, load_in_4bit=load_in_4bit)
+        engine = build_generation_engine({"MAX_CTX": "2048", **config}, token_callback=add_tokens)
         log_vram("model_loaded")
     generators = build_generators(config, engine)
 

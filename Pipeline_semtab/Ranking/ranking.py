@@ -16,7 +16,7 @@ def needs_llm(config, method):
         return True
     flags = ("CEA_USE_SLM", "CTA_USE_SLM", "CPA_USE_SLM")
     return any(config.get(f, "True").lower() == "true" for f in flags)
-def rank_folder(config):
+def rank_folder(config, llm=None):
     input_folder = config["INPUT_FOLDER"]
     preprocess_folder = config.get("PREPROCESS_FOLDER")
     if not preprocess_folder or not os.path.exists(preprocess_folder):
@@ -34,13 +34,11 @@ def rank_folder(config):
     writer = OutputWriter(output_folder, as_uri=as_uri, write_header=write_header,row_offset=row_offset, nil_label=nil_label)
     set_rate_limit(config.get("API_SLEEP", "0.1"))
 
-    llm = None
-
-    if needs_llm(config, method):
-        from llm_code_ranking import LLMEngine
+    if llm is None and needs_llm(config, method):
+        from llm_selection import LLMSelector
         reset_peaks()
         reset_tokens()
-        llm = LLMEngine(config)
+        llm = LLMSelector(config)
         log_vram("model_loaded")
 
     scorer = build_scorer(config, llm)

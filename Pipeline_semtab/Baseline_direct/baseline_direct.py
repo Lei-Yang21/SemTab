@@ -5,7 +5,7 @@ import time
 import string
 import pandas as pd
 
-from llm_code_baseline import LLMEngine
+from Pipeline_semtab.common.generation import build_generation_engine
 from output_writer_baseline import OutputWriter
 from vram_logger_baseline import log_vram, reset_peaks
 
@@ -147,7 +147,7 @@ def annotate_file(path, engine, writer, prompts, system_prompt, cfg, tasks):
             if pid:
                 writer.add_cpa(tab_id, sub_col, obj_col, pid)
 
-def baseline_folder(config):
+def baseline_folder(config, engine=None):
     input_folder = config["INPUT_FOLDER"]
     output_folder = config.get("OUTPUT_FOLDER") or (input_folder + "_baseline")
     tasks = {t.strip().lower() for t in config.get("TASKS", "cea,cta,cpa").split(",") if t.strip()}
@@ -158,16 +158,12 @@ def baseline_folder(config):
     prompts = {k: config.get(k, v) for k, v in DEFAULT_PROMPTS.items()}
     system_prompt = config.get("SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
 
-    model_name = config.get("MODEL_NAME", "").strip()
-    adapter_path = (config.get("ADAPTER_PATH", "") or "").strip() or None
-    load_in_4bit = str(config.get("LOAD_IN_4BIT", "false")).strip().lower() == "true"
-    max_ctx = int(config.get("MAX_CTX", "8192"))
-
     writer = OutputWriter(output_folder, as_uri=as_uri, write_header=write_header, row_offset=row_offset)
 
-    reset_peaks()
-    engine = LLMEngine(model_name, max_ctx=max_ctx, adapter_path=adapter_path, load_in_4bit=load_in_4bit)
-    log_vram("model_loaded")
+    if engine is None:
+        reset_peaks()
+        engine = build_generation_engine(config)
+        log_vram("model_loaded")
 
     files = sorted(f for f in os.listdir(input_folder) if f.endswith(".csv") and not f.endswith("_candidates.csv"))
     start_time = time.time()
@@ -180,5 +176,5 @@ def baseline_folder(config):
 
     log_vram("baseline_done")
     writer.flush()
-    print(f"Tokens: {engine.tokens_in} in, {engine.tokens_out} out")
+    print(f"Tokens: {getattr(engine, 'tokens_in', 0)} in, {getattr(engine, 'tokens_out', 0)} out")
     print(f"Finished folder {input_folder}: {len(files)} files in {time.time() - start_time:.2f}s")

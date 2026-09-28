@@ -21,7 +21,10 @@ On the SLURM cluster, each `Job/job_ranking_<experiment>.sh` script runs all con
 - `cea.py` / `cta.py` / `cpa.py` — task-specific scoring: candidate scoring per cell, column-type voting from CEA results, property matching from Wikidata claims.
 - `scoring.py` — string/quality/type-coherence metrics (Levenshtein, Jaccard, etc.) and quality transformations.
 - `scoring_method.py` — DataFrame scoring interface (`ScoringMethod`) and the weighted heuristic (`HeuristicScorer`). Default weights `(0.5, 0.2, 0.3)` correspond to similarity, quality and type coherence; these weights and the tie-break margin were fitted in `Utils/weights_margin.ipynb`.
-- `llm_code_ranking.py` — `LLMEngine`: HuggingFace model loading (optional LoRA adapter via `ADAPTER_PATH`), prompt templates (overridable via `CONTEXT_PROMPT`, `CTA_PROMPT`, `CPA_PROMPT`), greedy decoding by default, optional CoT and self-consistency sampling.
+- `llm_selection.py` — `LLMSelector`: CEA/CTA/CPA selection, debate, verification and self-consistency using an interchangeable generation backend.
+- `prompts.py` — `PromptBuilder`: prompt construction, including the existing template overrides and NIL/CoT instructions.
+- `response_parser.py` — `ResponseParser`: candidate IDs, final answers, NIL and verification replies.
+- `../common/generation.py` — shared generation backend: HuggingFace model loading, optional LoRA/4-bit loading, chat formatting, batching and token accounting.
 - `data_loader.py` — reads candidate CSVs and preprocessing files (incl. the CTA/CPA metadata header).
 - `output_writer.py` — writes `cea.csv`, `cta.csv`, `cpa.csv` in the SemTab submission format (URIs, row offset).
 - `wikidata_api_ranking.py` — rate-limited Wikidata API client (same client as the retrieval stage): labels, descriptions and claims are fetched live in batches, with no persistent cache.
@@ -98,6 +101,14 @@ candidate DataFrame.
 Run `python -m unittest discover -s tests -v` from the repository root. Scoring
 tests use local fixtures and mocked LLM calls, without loading a model.
 
+## Replacing LLM components
+
+The generation backend, prompt builder and response parser can be replaced
+independently. See [shared generation](../common/README.md) for their interfaces
+and `GENERATION_ENGINE` registration. For a supplied backend, construct
+`LLMSelector(config, backend=engine, prompts=builder, parser=parser)` and pass it
+to `rank_folder(config, llm=selector)`; omitted components use the defaults.
+
 ## NIL answers (`ALLOW_NIL`)
 
 Off by default, so every experiment of the thesis behaves exactly as before. It
@@ -105,7 +116,7 @@ exists for datasets whose ground truth contains mentions with no Wikidata entity
 (MammoTab 2025 — see `Mammotab/`), where a pipeline that always answers is wrong
 on every one of them.
 
-With `ALLOW_NIL:True`, the CEA prompts of `llm_code_ranking.py` gain a
+With `ALLOW_NIL:True`, the CEA prompts of `prompts.py` gain a
 `- NIL: none of the above` option and an instruction saying a NIL answer is
 correct for such a cell; the parsers read `NIL`, `none of these`, `no match`,
 `idk` and `I don't know` (a QID still wins, and in CoT mode an explicit

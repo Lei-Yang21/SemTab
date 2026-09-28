@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from hasAnnotation import hasAnnotation
 from typo_method import process_folder as typo_process_folder
@@ -37,5 +41,4 @@ def launch_code_preprocessing(config_path="config_preprocessing.txt"):
     
 
 if __name__ == "__main__":
-    import sys
     launch_code_preprocessing(sys.argv[1] if len(sys.argv) > 1 else "config_preprocessing.txt")
