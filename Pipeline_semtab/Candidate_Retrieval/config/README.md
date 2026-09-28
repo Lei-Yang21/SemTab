@@ -15,8 +15,14 @@ Retrieval configurations, grouped one subfolder per experiment. Plain text, one 
 ## Key parameters
 
 - `INPUT_FOLDER` / `OUTPUT_FOLDER` — preprocessing output to read, candidate CSVs to write.
-- `GENERATOR_ORDER` + `USE_DIRECT` / `USE_LLM` / `USE_FUZZY` — which generators run and in which order. The order also fixes the quality rank stored with each candidate (direct 1, llm 2, fuzzy 3), which the ranking scorer reuses.
-- `SEARCH_LIMIT` — results requested per Wikidata search query; `MAX_CANDIDATES_PER_CELL:0` means no cap after deduplication.
+- `GENERATOR_ORDER` + `USE_<NAME>` — which registered generators run and in which order. Built-ins are `direct`, `llm` and `fuzzy`; custom generators follow the same convention.
+- `<NAME>_QUALITY` — positive integer rank stored in the candidate CSV, independent of generator order. Defaults: direct 1, llm 2, fuzzy 3. With the default `1 / quality` scorer, smaller ranks score higher.
+- `DUPLICATE_QUALITY` — quality retained for a repeated QID: `first` (default), `min` or `max`. `min` supports a later generator with a better rank; labels and row order retain the first occurrence.
+- `SEARCH_LIMIT` / `<NAME>_SEARCH_LIMIT` — shared or per-generator results requested per query. `MAX_CANDIDATES_PER_CELL:0` means no cap after deduplication; with `min`/`max`, later generators still run to update the qualities of retained candidates after the cap is reached.
 - `LANGUAGE`, `API_SLEEP`, `ENRICH_CANDIDATES` — API client and the enrichment pass (descriptions, aliases, P31/P279, sitelinks).
 - `MODEL_NAME`, `ADAPTER_PATH`, `LOAD_IN_4BIT`, `PROMPT`, `LLM_MAX_SUGGESTIONS`, `LLM_MAX_NEW_TOKENS` — the LLM generator.
 - `LLM_SELF_CONSISTENCY` + `SC_SAMPLES` / `SC_TEMPERATURE` / `SC_TOP_P` — self-consistency sampling; the `SC_*` keys are inert while it is false.
+
+See the [retrieval README](../README.md#adding-generators) for registering
+another strategy. Existing generator qualities can be changed directly with
+`DIRECT_QUALITY`, `LLM_QUALITY` and `FUZZY_QUALITY`.

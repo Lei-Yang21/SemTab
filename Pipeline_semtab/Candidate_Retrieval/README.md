@@ -12,7 +12,7 @@ python main_candidate.py config/config_test_finetuning/config_lora.txt
 
 - `main_candidate.py` — entry point; parses the config and processes the input folder.
 - `candidate_retrieval.py` — orchestrator; reads the preprocessing metadata to know which cells to process, runs the generators, deduplicates and writes results.
-- `generators.py` — the candidate generators, applied in the order given by `GENERATOR_ORDER` and tagged with a decreasing quality rank used later by the scorer:
+- `generators.py` — extensible candidate generators, applied in `GENERATOR_ORDER`, each with its own configurable quality rank used later by the scorer. Defaults:
   - `DirectGenerator` (quality 1) — Wikidata full-text search on the cell value as-is.
   - `LLMGenerator` (quality 2) — the LLM proposes alternative surface forms/labels, each of which is then searched; optional self-consistency sampling (`LLM_SELF_CONSISTENCY`).
   - `FuzzyGenerator` (quality 3) — deterministic surface variants (quotes and parentheses stripped, leading article removed, `"Last, First"` reordered, split on `-` / `/`, first-word and first-two-word prefixes), each searched separately. Off by default.
@@ -24,6 +24,91 @@ python main_candidate.py config/config_test_finetuning/config_lora.txt
 - `Job/` — one SLURM script per experiment group; submit from this folder. Two of them (`job_limit_retrieval.sh`, `job_prompting_retrieval.sh`) are job arrays indexed by `SLURM_ARRAY_TASK_ID`, the others loop over the configs sequentially.
 
 > The config paths hard-coded in most `Job/*.sh` scripts are the flat `config/config_*.txt` paths that predate the reorganisation of `config/` into per-group subfolders. Update the `CONFIGS=(...)` list (e.g. `config/config_size/config_glm_9b.txt`) before resubmitting them.
+
+## Generator configuration
+
+Each generator has independent activation, quality and search-limit settings:
+
+```text
+GENERATOR_ORDER:direct,llm,fuzzy
+USE_DIRECT:True
+USE_LLM:True
+USE_FUZZY:True
+DIRECT_QUALITY:1
+LLM_QUALITY:2
+FUZZY_QUALITY:3
+SEARCH_LIMIT:10
+FUZZY_SEARCH_LIMIT:5
+DUPLICATE_QUALITY:first
+```
+
+Quality values are positive integer ranks, independent of execution order.
+The default ranking formula `1 / quality` favors smaller values. Changing the
+retrieval quality requires regenerating the candidate CSVs before ranking.
+Existing configurations retain qualities 1, 2 and 3, with fuzzy disabled.
+
+`DUPLICATE_QUALITY` controls the quality stored when generators return the same
+QID: `first` keeps the first occurrence (default), `min` keeps the smallest rank,
+and `max` keeps the largest. Use `min` with `1 / quality` to favor the best rank,
+or `max` if the ranking transform rewards larger values, such as `identity`.
+Labels and row order still come from the first occurrence.
+
+`MAX_CANDIDATES_PER_CELL` limits the number of distinct entities in the output.
+With `first`, retrieval stops once the cap is reached. With `min` or `max`, it
+continues running the generators to update qualities for retained entities;
+additional distinct entities are discarded. These policies can make more API
+calls. The cap's candidate selection still depends on generator order.
+
+## Adding generators
+
+`SearchGenerator` handles searching the suggested terms. Subclasses implement
+`suggestions(query, context_str)`. For a source that returns entities directly,
+subclass `BaseGenerator` and implement `candidates(query, context_str)`, returning
+an iterable of `(label, qid)` pairs.
+
+For another search strategy, register a factory under its own name:
+
+```python
+from generators import SearchGenerator, GENERATOR_FACTORIES, search_options
+
+class CustomGenerator(SearchGenerator):
+    name = "custom"
+    quality = 4
+
+    def suggestions(self, query, context_str):
+        return [query.lower()]
+
+def build_custom(config, engine, search):
+    return CustomGenerator(**search_options(config, "custom", search))
+
+GENERATOR_FACTORIES["custom"] = (build_custom, True)
+```
+
+Place the implementation and registry entry in `generators.py`, or import your
+extension module before calling `candidate_retrieval_folder`. Add `custom` to
+`GENERATOR_ORDER`; `USE_CUSTOM`, `CUSTOM_QUALITY` and `CUSTOM_SEARCH_LIMIT` follow
+the same convention as the built-in generators.
+
+Changing the quality of existing generators requires only configuration. For
+example, to give fuzzy candidates a higher quality score than LLM candidates
+under `1 / quality`:
+
+```text
+GENERATOR_ORDER:direct,llm,fuzzy
+USE_FUZZY:True
+DIRECT_QUALITY:1
+LLM_QUALITY:3
+FUZZY_QUALITY:2
+DUPLICATE_QUALITY:min
+```
+
+Swap the quality values to reverse that preference. No new generator is needed.
+
+Registry factories receive `(config, engine, search)`; the boolean sets the
+default enabled state. They may return `None` when unavailable, as the LLM
+factory does without an engine. `SearchGenerator` and `build_generators` accept
+an optional `search(query, language, limit)` function to replace Wikidata search.
+An unrecognized generator name is warned about and skipped, as before.
 
 ## Result
 

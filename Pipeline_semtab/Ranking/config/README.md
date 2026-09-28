@@ -1,9 +1,10 @@
 # config
 
-Experiment configurations for the ranking stage. Each subfolder is one experiment group, run by the matching `Job/job_ranking_<group>.sh` script one level up. Files are plain text, one `KEY:value` per line, `#` for comments.
+Experiment configurations for the ranking stage. Each subfolder is one experiment group. Existing sweeps use the matching `Job/job_ranking_<group>.sh` script one level up; `heuristic/` provides direct launch commands in its README. Files are plain text, one `KEY:value` per line, `#` for comments.
 
 ## Groups
 
+- `heuristic/` — compares quality transforms (`1 / quality` and `quality`) with the same weights and no LLM. See its README for adding another formula.
 - `methods/` — compares the selection methods on the Valid split: `limited_slm`, `full_slm`, `slm_context`, plus `config_noslm.txt` (pure heuristic, `*_USE_SLM:False` and `CTA_FROM_SELECTION:False`) as the no-LLM floor. Contains the **single baseline** `config_slm_context.txt` (slm_context, Qwen2.5-3B, `candidate_lora_fp16` input, margin 0.10, zero-shot). All other groups vary exactly one factor relative to this baseline, so the duplicate baseline configs were removed from the other groups.
 - `context_margin/` — sweep of the `LLM_CONTEXT_MARGIN` gate threshold.
 - `models/` — compares base LLMs (Qwen2.5, Llama 3.x, Gemma, GLM-4).
@@ -23,6 +24,9 @@ Each group has its own README with the per-config details.
 - `INPUT_FOLDER` / `PREPROCESS_FOLDER` / `OUTPUT_FOLDER` — candidate CSVs, preprocessing files, result destination.
 - `METHOD` — `limited_slm` | `full_slm` | `slm_context`; `MODEL_NAME` — HuggingFace model id; `ADAPTER_PATH` — optional LoRA adapter.
 - `TASKS` — which of `cea,cta,cpa` to produce.
+- `SCORING_METHOD` — scorer class registered for the run; `heuristic` by default.
+- `CEA_FEATURES` / `CEA_WEIGHTS` — heuristic components and their corresponding weights (`string,quality,type` and `0.5,0.2,0.3` by default).
+- `CEA_QUALITY_METHOD` — quality transform registered in `scoring.QUALITY_METHODS`; `inverse` by default, or `identity`.
 - `LLM_GATE` / `LLM_CONTEXT_MARGIN` / `LLM_CONTEXT_MAX_ROWS` — when and with how much table context the LLM is invoked (slm_context only).
 - `CONTEXT_COT`, `CONTEXT_SELF_CONSISTENCY` + `SC_*` — CoT and self-consistency options; `SC_*` only take effect when self-consistency is enabled.
 - `CONTEXT_PROMPT`, `CTA_PROMPT`, `CPA_PROMPT` — override the built-in prompt templates (used by `prompts/` and `tablellama/`).

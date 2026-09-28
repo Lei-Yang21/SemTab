@@ -65,6 +65,9 @@ in `scoring.QUALITY_METHODS`. Weights are not normalized and must match the
 number and order of features. For example, `CEA_FEATURES:string,type` and
 `CEA_WEIGHTS:0.7,0.3` remove the quality component.
 
+See [config/heuristic](config/heuristic/README.md) for two comparable experiment
+configurations and an example of registering a custom quality formula.
+
 To add a different heuristic, an ML scorer or an LLM scorer, subclass
 `ScoringMethod` and implement `_score(candidates_df, context)`. Return one finite
 number per row as a list, array or Series; a Series must preserve the input
