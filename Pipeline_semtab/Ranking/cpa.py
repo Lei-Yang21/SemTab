@@ -1,6 +1,6 @@
 import re
 from collections import Counter
-from wikidata_api_ranking import get_entity_claims, get_labels
+from Pipeline_semtab.common.knowledge import WikidataClient
 
 def to_float(s):
     if s is None:
@@ -40,10 +40,12 @@ def match_properties(subject_claims, object_value=None, object_qid=None,object_i
                     pids.append(pid)
                     break
     return pids
-def resolve_pair(sub_col, obj_col, n_rows, cea_choice, data_df, obj_is_entity, llm=None, use_slm=True, col_header="", sub_type="", obj_type=""):
+def resolve_pair(sub_col, obj_col, n_rows, cea_choice, data_df, obj_is_entity, llm=None, use_slm=True, col_header="", sub_type="", obj_type="", knowledge=None):
 
+    if knowledge is None:
+        knowledge = WikidataClient()
     subj_qids = [cea_choice.get((r, sub_col)) for r in range(n_rows)]
-    claims_map = get_entity_claims([q for q in subj_qids if q])
+    claims_map = knowledge.get_entity_claims([q for q in subj_qids if q])
 
     votes = Counter()
     sample_vals = []
@@ -74,7 +76,7 @@ def resolve_pair(sub_col, obj_col, n_rows, cea_choice, data_df, obj_is_entity, l
         return ranked[0][0]
     
     tied = [pid for pid, c in ranked if c == ranked[0][1]]
-    labels = get_labels(tied)
+    labels = knowledge.get_labels(tied)
     cands = [{"pid": pid, "label": labels.get(pid, pid)} for pid in tied]
     choice = llm.select_best_property(cands, col_header, sample_vals, sub_type=sub_type, obj_type=obj_type)
     return choice if choice else ranked[0][0]

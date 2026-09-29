@@ -1,10 +1,12 @@
-from wikidata_api import get_entity_data
+from Pipeline_semtab.common.knowledge import WikidataClient
 
 LIST_SEP = "|"
 ENRICHMENT_COLUMNS = ["description", "aliases", "P31", "P279", "sitelink"]
-def enrich_rows(rows, language="en"):
+def enrich_rows(rows, language="en", knowledge=None):
+    if knowledge is None:
+        knowledge = WikidataClient()
     qids = sorted({r["QID"] for r in rows if r.get("QID")})
-    data = get_entity_data(qids, language)
+    data = knowledge.get_entity_data(qids, language)
 
     for row in rows:
         info = data.get(row.get("QID", ""), {})

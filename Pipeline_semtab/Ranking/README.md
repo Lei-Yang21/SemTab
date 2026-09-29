@@ -27,7 +27,7 @@ On the SLURM cluster, each `Job/job_ranking_<experiment>.sh` script runs all con
 - `../common/generation.py` — shared generation backend: HuggingFace model loading, optional LoRA/4-bit loading, chat formatting, batching and token accounting.
 - `data_loader.py` — reads candidate CSVs and preprocessing files (incl. the CTA/CPA metadata header).
 - `output_writer.py` — writes `cea.csv`, `cta.csv`, `cpa.csv` in the SemTab submission format (URIs, row offset).
-- `wikidata_api_ranking.py` — rate-limited Wikidata API client (same client as the retrieval stage): labels, descriptions and claims are fetched live in batches, with no persistent cache.
+- `../common/knowledge.py` — shared `KnowledgeSource` interface and `WikidataClient`: labels, descriptions and claims use one client per ranking run, with no persistent cache by default.
 - `logger_ranking.py` — cost logging for the SLM calls: per-table GPU memory and prompt/generated token counts. Both files are written to the `log_ranking/` folder, created on the first write, and are named after the run's `OUTPUT_FOLDER` (`vram_log_ranking_<output folder>.csv`, `token_log_ranking_<output folder>.csv`), so successive variants do not mix into one file; setting `LOG_DIR` moves the folder, and `VRAM_LOG_FILE` / `TOKEN_LOG_FILE` override the full path. Token rows carry the per-table delta and the running total, over every task (CEA, CTA, CPA) and every extra call of the method (debate, verify, self-consistency samples). Nothing is logged for a run without SLM.
 - `wikidata_cache.json` — leftover label cache from an earlier run; no code in this folder reads it (the API client is cacheless), it is kept only to avoid re-querying the API from the analysis notebooks.
 - `config/` — the experiment groups, one subfolder each. See its README.
@@ -100,6 +100,14 @@ candidate DataFrame.
 
 Run `python -m unittest discover -s tests -v` from the repository root. Scoring
 tests use local fixtures and mocked LLM calls, without loading a model.
+
+## Knowledge source
+
+`rank_folder(config, knowledge=source)` accepts a replacement `KnowledgeSource`.
+The same instance supplies contextual type labels, CTA candidates, CPA claims
+and property labels for every table. Without one, ranking creates a
+`WikidataClient` using `API_SLEEP`. See
+[knowledge sources](../common/README.md#knowledge-sources) for the interface.
 
 ## Replacing LLM components
 

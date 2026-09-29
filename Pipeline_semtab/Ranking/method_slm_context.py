@@ -1,7 +1,6 @@
 import cea as cea_mod
 from cta import choose_cta, infer_literal_type
 from method_base import run_cpa
-from wikidata_api_ranking import get_entities
 
 def flag(cfg, key, default="True"):
     return cfg.get(key, default).lower() == "true"
@@ -18,7 +17,7 @@ def get_type_labels(ctx, shortlist):
     if not qids:
         return {}
     try:
-        info = get_entities(qids, ctx.language)
+        info = ctx.knowledge.get_entities(qids, ctx.language)
     except Exception:
         return {}
     return {q: v.get("label", "") for q, v in info.items()}
@@ -80,7 +79,7 @@ def annotate(ctx):
             ctx.rebuild_cta_from_selection()
         for col in ctx.cta_cols:
             if col in ctx.cta_by_col:
-                qid = choose_cta(ctx.cta_by_col[col], llm=ctx.llm, use_slm=use_slm_cta,language=ctx.language, col_values=ctx.col_values(col),col_header=ctx.col_header(col), margin=cta_margin, topk=cta_topk)
+                qid = choose_cta(ctx.cta_by_col[col], llm=ctx.llm, use_slm=use_slm_cta,language=ctx.language, col_values=ctx.col_values(col),col_header=ctx.col_header(col), margin=cta_margin, topk=cta_topk, knowledge=ctx.knowledge)
             else:
                 qid = infer_literal_type(ctx.col_values(col))
             if qid:

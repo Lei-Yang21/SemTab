@@ -6,7 +6,7 @@ import pandas as pd
 from enrichment import enrich_rows, ENRICHMENT_COLUMNS
 from generators import build_generators
 from logger_candidate_retrieval import log_vram, reset_peaks, log_tokens, reset_tokens, set_run_name, add_tokens
-import wikidata_api
+from Pipeline_semtab.common.knowledge import WikidataClient
 
 QUALITY_MERGES = {"first": lambda old, new: old, "min": min, "max": max}
 
@@ -71,7 +71,7 @@ def retrieve_for_cell(query, context_str, idx, col_idx, generators, max_candidat
     if not rows:
         rows.append({"data": query, "candidates": "", "QID": "","row": idx, "columns": col_idx, "quality": 0})
     return rows
-def candidate_retrieval_file(input_file, generators, max_candidates=0, output_folder=None,enrich=True, language="en", emit_empty=False, duplicate_quality="first"):
+def candidate_retrieval_file(input_file, generators, max_candidates=0, output_folder=None,enrich=True, language="en", emit_empty=False, duplicate_quality="first", knowledge=None):
     df, process = read_which_to_process(input_file)
     rows = []
 
@@ -87,7 +87,7 @@ def candidate_retrieval_file(input_file, generators, max_candidates=0, output_fo
 
     columns = ["data", "candidates", "QID", "row", "columns", "quality"]
     if enrich:
-        enrich_rows(rows, language)
+        enrich_rows(rows, language, knowledge)
         columns += ENRICHMENT_COLUMNS
     df_out = pd.DataFrame(rows, columns=columns)
     if output_folder:
@@ -96,8 +96,9 @@ def candidate_retrieval_file(input_file, generators, max_candidates=0, output_fo
     else:
         output_file = input_file.replace(".csv", "_candidates.csv")
     df_out.to_csv(output_file, index=False)
-def candidate_retrieval_folder(folder, config, engine=None):
-    wikidata_api.set_rate_limit(config.get("API_SLEEP", "0.05"))
+def candidate_retrieval_folder(folder, config, engine=None, knowledge=None):
+    if knowledge is None:
+        knowledge = WikidataClient(sleep=config.get("API_SLEEP", "0.05"))
     max_candidates = int(config.get("MAX_CANDIDATES_PER_CELL", "0"))
     duplicate_quality = config.get("DUPLICATE_QUALITY", "first").strip().lower()
     if duplicate_quality not in QUALITY_MERGES:
@@ -119,13 +120,13 @@ def candidate_retrieval_folder(folder, config, engine=None):
         reset_tokens()
         engine = build_generation_engine({"MAX_CTX": "2048", **config}, token_callback=add_tokens)
         log_vram("model_loaded")
-    generators = build_generators(config, engine)
+    generators = build_generators(config, engine, search=knowledge.search_entities)
 
     files = [f for f in os.listdir(folder)if f.endswith(".csv") and not f.endswith("_candidates.csv")]
     total = len(files)
     start_time = time.time()
     for i, f in enumerate(files, 1):
-       candidate_retrieval_file(os.path.join(folder, f), generators,max_candidates, output_folder,enrich=enrich, language=language,emit_empty=emit_empty, duplicate_quality=duplicate_quality)
+       candidate_retrieval_file(os.path.join(folder, f), generators,max_candidates, output_folder,enrich=enrich, language=language,emit_empty=emit_empty, duplicate_quality=duplicate_quality, knowledge=knowledge)
        if engine is not None:
            log_tokens(f)
 

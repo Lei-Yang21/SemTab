@@ -18,7 +18,7 @@ python main_candidate.py config/config_test_finetuning/config_lora.txt
   - `FuzzyGenerator` (quality 3) — deterministic surface variants (quotes and parentheses stripped, leading article removed, `"Last, First"` reordered, split on `-` / `/`, first-word and first-two-word prefixes), each searched separately. Off by default.
 - `enrichment.py` — fetches description, aliases, P31/P279 types and sitelink count for each candidate QID (features used by the ranking scorer).
 - `../common/generation.py` — shared generation backend (chat formatting, batching, optional LoRA/4-bit loading and token accounting). Retrieval keeps a default context length of 2048.
-- `wikidata_api.py` — rate-limited Wikidata API client with retry/backoff and caching.
+- `../common/knowledge.py` — replaceable knowledge source and Wikidata HTTP client. Search and enrichment share one instance per run, with retry/backoff and no persistent cache.
 - `logger_candidate_retrieval.py` — cost logging for the LLM generator: per-table GPU memory and prompt/generated token counts. Both files are written to the `log_candidate_retrieval/` folder, created on the first write, and are named after the run's `OUTPUT_FOLDER` (`vram_log_candidate_retrieval_<output folder>.csv`, `token_log_candidate_retrieval_<output folder>.csv`), so successive variants do not mix into one file; setting `LOG_DIR` moves the folder, and `VRAM_LOG_FILE` / `TOKEN_LOG_FILE` override the full path. Token rows carry the per-table delta and the running total. Nothing is logged when `USE_LLM` is off (no `MODEL_NAME`): the stage is then pure API search.
 - `config/` — the experiment groups, one subfolder each. See its README.
 - `Job/` — one SLURM script per experiment group; submit from this folder. Two of them (`job_limit_retrieval.sh`, `job_prompting_retrieval.sh`) are job arrays indexed by `SLURM_ARRAY_TASK_ID`, the others loop over the configs sequentially.
@@ -116,6 +116,15 @@ and the direct baseline. Select a registered backend with `GENERATION_ENGINE`
 `candidate_retrieval_folder(folder, config, engine=engine)`. See
 [shared generation](../common/README.md) for the backend contract. The generator
 retains its term parsing, suggestion limits and self-consistency vote.
+
+## Knowledge source
+
+`candidate_retrieval_folder(folder, config, knowledge=source)` accepts a
+`KnowledgeSource` for both search and enrichment. Omitting it creates a
+`WikidataClient` with the configured `API_SLEEP`. Direct calls to
+`candidate_retrieval_file` and `enrich_rows` also accept `knowledge=` for
+enrichment; generators can receive `search=source.search_entities`. See
+[knowledge sources](../common/README.md#knowledge-sources) for the data contract.
 
 ## Result
 

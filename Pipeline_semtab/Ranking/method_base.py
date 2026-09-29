@@ -2,13 +2,13 @@ import re
 from data_loader import (load_candidates, load_preprocess, group_by_cell,candidate_columns, tab_id_from_filename)
 from cta import build_type_pct, cta_from_cea, cta_from_selection
 from scoring_method import build_scorer
-from wikidata_api_ranking import get_entities
+from Pipeline_semtab.common.knowledge import WikidataClient
 import cpa as cpa_mod
 
 
 class TableContext:
 
-    def __init__(self, input_path, preprocess_path, config, llm, writer, scorer=None):
+    def __init__(self, input_path, preprocess_path, config, llm, writer, scorer=None, knowledge=None):
         self.tab_id = tab_id_from_filename(input_path)
         self.cand_df = load_candidates(input_path)
         self.data_df, self.cta_cols, self.cpa_pairs = load_preprocess(preprocess_path)
@@ -19,6 +19,7 @@ class TableContext:
         self.cta_result = cta_from_cea(self.cand_df)        
         self.cta_by_col = {c: (c, p31, p279) for c, p31, p279 in self.cta_result}
         self.type_pct = build_type_pct(self.cta_result)     
+        self.knowledge = knowledge if knowledge is not None else WikidataClient(sleep=config.get("API_SLEEP", "0.1"))
         self.config = config
         self.llm = llm
         self.language = config.get("LANGUAGE", "en")
@@ -81,7 +82,7 @@ class TableContext:
             ranked = list((p31 or p279).items())
             if ranked:
                 top = ranked[0][0]
-                info = get_entities([top], self.language)
+                info = self.knowledge.get_entities([top], self.language)
                 label = info.get(top, {}).get("label", top)
         self._type_label[col] = label
         return label
@@ -93,7 +94,7 @@ class TableContext:
         if not qid:
             return self.column_type_label(col)
         if qid not in self._final_label:
-            info = get_entities([qid], self.language)
+            info = self.knowledge.get_entities([qid], self.language)
             self._final_label[qid] = info.get(qid, {}).get("label", qid)
         return self._final_label[qid]
 
@@ -126,5 +127,5 @@ def run_cpa(ctx, use_slm):
             obj_is_entity, llm=ctx.llm, use_slm=use_slm,
             col_header=ctx.col_header(obj_col),
             sub_type=ctx.final_type_label(sub_col),
-            obj_type=ctx.final_type_label(obj_col) if obj_is_entity else "")
+            obj_type=ctx.final_type_label(obj_col) if obj_is_entity else "", knowledge=ctx.knowledge)
         ctx.writer.add_cpa(ctx.tab_id, sub_col, obj_col, pid)

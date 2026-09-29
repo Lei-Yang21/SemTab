@@ -41,7 +41,7 @@ def annotate(ctx):
             ctx.rebuild_cta_from_selection()
         for col in ctx.cta_cols:
             if col in ctx.cta_by_col:
-                qid = choose_cta(ctx.cta_by_col[col], llm=ctx.llm, use_slm=use_slm_cta,language=ctx.language, col_values=ctx.col_values(col),col_header=ctx.col_header(col), margin=cta_margin, topk=cta_topk)
+                qid = choose_cta(ctx.cta_by_col[col], llm=ctx.llm, use_slm=use_slm_cta,language=ctx.language, col_values=ctx.col_values(col),col_header=ctx.col_header(col), margin=cta_margin, topk=cta_topk, knowledge=ctx.knowledge)
             else:
                 qid = infer_literal_type(ctx.col_values(col))
             if qid:

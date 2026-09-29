@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 import pandas as pd
 
-from wikidata_api_ranking import get_entities
+from Pipeline_semtab.common.knowledge import WikidataClient
 
 def build_type_pct(cta_result):
     out = {}
@@ -52,7 +52,7 @@ def cta_from_selection(cand_df, cea_choice):
     if len(sel) == 0:
         return None
     return cta_from_cea(sel)
-def choose_cta(col_result, llm=None, use_slm=True, language="en", col_values=None,col_header="", margin=0.3, topk=5):
+def choose_cta(col_result, llm=None, use_slm=True, language="en", col_values=None,col_header="", margin=0.3, topk=5, knowledge=None):
 
     _, p31, p279 = col_result
     ranked = list((p31 or p279).items())
@@ -63,7 +63,9 @@ def choose_cta(col_result, llm=None, use_slm=True, language="en", col_values=Non
         return top
     if ranked[0][1] - ranked[1][1] < margin:
         top_ids = [q for q, _ in ranked[:topk]]
-        info = get_entities(top_ids, language)
+        if knowledge is None:
+            knowledge = WikidataClient()
+        info = knowledge.get_entities(top_ids, language)
         cands = [{"qid": q,"label": info.get(q, {}).get("label", q),"description": info.get(q, {}).get("description", "")}for q in top_ids]
         choice = llm.select_best_type(cands, col_values, col_header)
         if choice:

@@ -1,4 +1,56 @@
-# Shared generation
+# Shared services
+
+## Knowledge sources
+
+`knowledge.py` provides `KnowledgeSource` and its HTTP implementation,
+`WikidataClient`. Retrieval, enrichment, ranking and ranking-dataset preparation
+use this interface. A future dump reader or cache can implement the same methods:
+
+| Method | Result |
+| --- | --- |
+| `search_entities(query, language="en", limit=10)` | Iterable of `(label, qid)` pairs |
+| `get_entity_data(qids, language="en")` | QID-to-dictionary mapping: description, aliases, P31, P279, sitelink |
+| `get_labels(qids, language="en")` | QID/PID-to-label mapping |
+| `get_entity_claims(qids)` | QID-to-property mapping; each property contains `[kind, value]` pairs |
+| `get_entities(qids, language="en")` | Entity data plus labels; provided by `KnowledgeSource` using the two methods above |
+
+Aliases, P31 and P279 are lists. `sitelink` is the requested language's Wikipedia
+article title, not a count. Claim kinds include `entity`, `quantity`, `time`,
+`string` and `coord`; CPA matching uses the first four. `get_entities` copies
+entity dictionaries before adding labels, so a source's cached data is preserved.
+
+Each run creates one client and reuses it across its tables and operations.
+The HTTP session, request delay, backoff settings and temporary maxlag state
+belong to the client instance. No global client or persistent cache is used.
+Default request delays remain 0.05 seconds for retrieval and 0.1 for ranking
+and dataset preparation, configurable through `API_SLEEP`.
+
+Pass a source explicitly to reuse it across stages or replace the live API:
+
+```python
+from Pipeline_semtab.common.knowledge import WikidataClient
+
+source = WikidataClient(sleep=0.2)
+candidate_retrieval_folder(input_folder, retrieval_config, knowledge=source)
+rank_folder(ranking_config, knowledge=source)
+build_datasets(dataset_config_path, knowledge=source)
+```
+
+The stage functions come from their respective modules. Replace `source` with
+your `KnowledgeSource` implementation to use a local dump or cache. Supplied
+sources keep their own delay settings; stage configuration does not mutate them.
+Direct calls to `enrich_rows`, `choose_cta`, `resolve_pair` and `TableContext`
+also accept `knowledge=`. Generator factories receive the source's bound
+`search_entities` method through the existing `search` argument.
+
+`WikidataClient(session=..., wait=..., clock=...)` supports replacing the HTTP
+transport, waiting and monotonic clock for tests. It retains 50-entity request
+batches, retries, Retry-After handling and English label fallback. Total lag
+waiting is bounded even after maxlag is temporarily disabled. Its
+`fulltext_search` method is available for direct callers. The two former
+per-stage API modules have been removed; import `WikidataClient` here instead.
+
+## Shared generation
 
 Preprocessing, candidate retrieval, ranking and the direct baseline use `generation.py`.
 `GenerationEngine` defines the backend interface; `HuggingFaceEngine` handles

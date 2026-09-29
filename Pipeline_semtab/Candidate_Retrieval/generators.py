@@ -1,5 +1,5 @@
 import re
-from wikidata_api import search_entities
+from Pipeline_semtab.common.knowledge import WikidataClient
 
 class BaseGenerator:
     name = "base"
@@ -12,7 +12,7 @@ class SearchGenerator(BaseGenerator):
     def __init__(self, language="en", limit=10, search=None):
         self.language = language
         self.limit = limit
-        self.search = search if search is not None else search_entities
+        self.search = search if search is not None else WikidataClient().search_entities
 
     def suggestions(self, query, context_str):
         raise NotImplementedError
@@ -162,6 +162,8 @@ def build_fuzzy(config, engine, search):
 GENERATOR_FACTORIES = {"direct": (build_direct, True), "llm": (build_llm, True), "fuzzy": (build_fuzzy, False)}
 
 def build_generators(config, engine=None, search=None):
+    if search is None:
+        search = WikidataClient(sleep=config.get("API_SLEEP", "0.1")).search_entities
     order = [n.strip() for n in config.get("GENERATOR_ORDER", "direct,llm,fuzzy").split(",")]
     generators = []
     for name in order:

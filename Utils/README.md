@@ -11,7 +11,7 @@ Helper scripts and notebooks that support the pipeline but are not part of it: d
 ## Finetuning data
 
 - `dataset_build.ipynb` : builds the JSON training set of the retrieval candidate generator (`candidate_gen_*.json`).
-- `dataset_build_ranking.py` : builds the ranking training sets (`ft_slm_context_*.json`, `ft_slm_limited_*.json`) by replaying the ranking prompts against the ground truth; queries the Wikidata API for labels/descriptions, with maxlag handling and exponential backoff. Config-driven.
+- `dataset_build_ranking.py` : builds the ranking training sets (`ft_slm_context_*.json`, `ft_slm_limited_*.json`) by replaying the ranking prompts against the ground truth; uses the shared `WikidataClient` for labels/descriptions, with maxlag handling and exponential backoff. `build_datasets(config_path, knowledge=source)` accepts a replacement `KnowledgeSource`, such as a local dump reader. Config-driven.
 - `finetune/config_finetune.txt` its config: which split to read, `FT_METHOD` (which of the two datasets to build), output folder, validation ratio and seed, plus the gate keys mirroring the ranking inference config so the training distribution matches inference.
 - `job_create.sh` : SLURM job running `dataset_build_ranking.py` over the configs listed in it.
 

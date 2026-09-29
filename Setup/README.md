@@ -10,4 +10,4 @@ Everything needed to reproduce the execution environment of the experiments, and
 
 ## Note
 
-No code in the repository reads the reduced dump: the pipeline as committed queries the live Wikidata API (`wikidata_api.py`, `wikidata_api_ranking.py`). The extraction is kept as the offline fallback prepared for the thesis — using it would mean replacing the API clients, not just pointing a path at `reduced/`.
+No code in the repository reads the reduced dump: the pipeline defaults to the live Wikidata API through `Pipeline_semtab/common/knowledge.py`. To use this extraction, implement the `KnowledgeSource` interface for the dump and pass that source to retrieval and ranking through `knowledge=`; setting a path to `reduced/` alone does not enable it.
