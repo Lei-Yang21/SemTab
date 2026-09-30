@@ -35,6 +35,17 @@ class OutputWriter:
         if not pid:
             return
         self.cpa.append({"tab_id": tab_id, "sub_col_id": int(sub_col_id),"obj_col_id": int(obj_col_id),"property": self.fmt(pid, PROP_URI)})
+    def add_result(self, tab_id, result, tasks=("cea", "cta", "cpa")):
+        if "cea" in tasks:
+            for (row, col), qid in result.cea.items():
+                self.add_cea(tab_id, row, col, qid)
+        if "cta" in tasks:
+            for col, qid in result.cta.items():
+                self.add_cta(tab_id, col, qid)
+        if "cpa" in tasks:
+            for (sub_col, obj_col), pid in result.cpa.items():
+                self.add_cpa(tab_id, sub_col, obj_col, pid)
+
     def write(self, rows, columns, name):
         path = os.path.join(self.output_folder, name)
         pd.DataFrame(rows, columns=columns).to_csv(path, index=False, header=self.write_header)

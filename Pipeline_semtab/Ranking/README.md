@@ -17,7 +17,9 @@ On the SLURM cluster, each `Job/job_ranking_<experiment>.sh` script runs all con
 - `method_limited_slm.py` — rule-based selection (weighted scores) with an optional SLM tie-break on uncertain cells.
 - `method_full_slm.py` — LLM debate + verify: the model picks among top-k candidates, then optionally verifies its own choice.
 - `method_slm_context.py` — gated LLM selection with table context; the LLM is only called when the heuristic score margin is below a threshold (`LLM_GATE`, `LLM_CONTEXT_MARGIN`).
-- `method_base.py` — shared `TableContext` (cells, headers, tasks), the `rebuild_cta_from_selection` logic and common CPA logic.
+- `table_context.py` — `TableContext` holds DataFrames and table metadata; `load_table_context` reads CSVs and `prepare_table` computes features and scores.
+- `method_base.py` — `RankingSession` holds execution services and an `AnnotationResult` containing CEA/CTA/CPA decisions; also contains CTA rebuilding and common CPA logic.
+- `table_labels.py` — `TableLabels` resolves candidate types and final CTA labels through the knowledge source.
 - `cea.py` / `cta.py` / `cpa.py` — task-specific scoring: candidate scoring per cell, column-type voting from CEA results, property matching from Wikidata claims.
 - `scoring.py` — string/quality/type-coherence metrics (Levenshtein, Jaccard, etc.) and quality transformations.
 - `scoring_method.py` — DataFrame scoring interface (`ScoringMethod`) and the weighted heuristic (`HeuristicScorer`). Default weights `(0.5, 0.2, 0.3)` correspond to similarity, quality and type coherence; these weights and the tie-break margin were fitted in `Utils/weights_margin.ipynb`.
@@ -46,8 +48,8 @@ scored_df = scorer.score(candidates_df)
 It preserves the input rows, columns, index and order. Higher scores rank first.
 Empty inputs return an empty DataFrame with a `score` column.
 
-`rank_folder` creates the scorer once per run. `TableContext` calls it once per
-table when CEA or CPA is requested, passing itself as the optional `context`.
+`rank_folder` creates the scorer once per run. `prepare_table` calls it once per
+table when CEA or CPA is requested, passing the table as the optional `context`.
 This provides the table data, headers, row context and per-column `type_pct`.
 The resulting `scored_df` supplies the scores used by all three ranking methods
 for sorting, shortlists and margins. `METHOD` still selects the annotation flow;
@@ -100,6 +102,54 @@ candidate DataFrame.
 
 Run `python -m unittest discover -s tests -v` from the repository root. Scoring
 tests use local fixtures and mocked LLM calls, without loading a model.
+
+## Tables, services and results
+
+`TableContext(tab_id, data_df, cand_df, cta_cols=None, cpa_pairs=None)` receives
+DataFrames already loaded in memory. Its constructor does not read files, call
+the knowledge source or compute scores. Row and column IDs in candidates and
+metadata are zero-based positions in `data_df`. Candidate columns follow the
+retrieval CSV schema; `P31`, `P279` and aliases use pipe-separated strings.
+
+`load_table_context(input_path, preprocess_path)` handles the existing CSV
+format. `prepare_table(table, scorer)` computes candidate groups, type coverage
+and scores; omitting the scorer prepares the table without scoring, as needed
+for CTA-only runs. Both inference and fine-tuning data preparation use these
+functions. Input DataFrames are retained by reference; scoring returns a
+separate `scored_df`.
+
+With the repository root and `Pipeline_semtab/Ranking` on Python's import path,
+an in-memory annotation can be run as follows:
+
+```python
+from table_context import TableContext, prepare_table
+from method_base import RankingSession
+from ranking import annotator
+from scoring_method import build_scorer
+
+table = TableContext("my_table", data_df, candidates_df, cta_cols=[0], cpa_pairs=[])
+prepare_table(table, build_scorer(config, llm=selector))
+run = RankingSession(table, config, llm=selector, knowledge=source)
+annotator(config.get("METHOD", "limited_slm"))(run)
+result = run.result
+```
+
+`selector` can be `None` when the selected method and scorer do not need an LLM.
+`source` implements `KnowledgeSource`; omitting it creates a `WikidataClient`.
+`RankingSession` also accepts `labels=` and `result=` to supply these components.
+The result contains dictionaries `cea[(row, col)]`, `cta[col]` and
+`cpa[(subject_col, object_col)]`. NIL decisions remain in `cea`, but are excluded
+from CTA voting and CPA lookups. CEA decisions needed internally for CPA remain
+available even when only CPA is requested.
+
+Annotation methods do not write files. Export separately with
+`writer.add_result(table.tab_id, result, run.tasks)` and `writer.flush()`.
+`rank_folder` handles this export automatically and returns results keyed by
+table ID. It accepts `scorer=`, `knowledge=`, `llm=`, `writer=` and
+`table_loader=`; the loader receives the candidate and preprocessing paths and
+returns an unprepared `TableContext`. Folder traversal still uses the existing
+CSV filename convention. A replacement writer implements `add_result` and
+`flush`.
 
 ## Knowledge source
 
