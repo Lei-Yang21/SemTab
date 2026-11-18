@@ -18,14 +18,14 @@ Each stage writes CSVs that the next stage reads, so stages can also be run and 
   python main_pipeline.py config/config_preprocessing.txt config/config_candidate.txt config/config_ranking.txt
   ```
 
-- `config/` — chained configs of the full run using the best setting of each stage: no-LLM preprocessing → LoRA-finetuned candidate generator → slm_context ranking (Qwen2.5-3B, margin 0.10). Each stage's `OUTPUT_FOLDER` is the next stage's `INPUT_FOLDER`; final annotations go to `results/full_run`.
+- `config/` — chained reference configs: no-LLM preprocessing → LoRA-finetuned candidate generator → slm_context ranking (Qwen2.5-3B, margin 0.10). The ranking config has no adapter; reproducing the thesis's fine-tuned ranking results requires a config from `Ranking/config/finetuning/` with matching input and adapter paths. Each stage's `OUTPUT_FOLDER` is the next stage's `INPUT_FOLDER`; final annotations go to `results/full_run`.
 - `job_full_pipeline.sh` — SLURM job; submit from this folder, which must contain (or symlink) `WikidataTables2024R1/` and the `lora-fp16-adapter/` used by the retrieval stage.
 
 ## Smoke run
 
-Fast end-to-end check (minutes, not hours) with the exact same settings as the full run, on a 5-table subset:
+Smaller end-to-end check with the same settings as the full run, on a 5-table subset. It still requires the base model, retrieval adapter and Wikidata access; runtime depends on the hardware and API:
 
-- `make_smoke_subset.py` : builds `WikidataTables2024R1/DataSets/Valid_smoke/` deterministically: the 5 tables with the fewest CEA targets that also have CTA and CPA targets, with the target files filtered accordingly.
+- `make_smoke_subset.py` : builds `WikidataTables2024R1/DataSets/Valid_smoke/` deterministically: up to 5 tables with the fewest CEA targets, prioritising tables with CTA and CPA targets too, with the target files filtered accordingly.
 - `config/smoke/` : same three configs as `config/` but pointing to the subset; outputs to `results/smoke_run`.
 - `job_smoke_pipeline.sh` : 2h SLURM job; builds the subset if missing, then runs `main_pipeline.py` on it. Locally: `python make_smoke_subset.py && python main_pipeline.py config/smoke/config_preprocessing.txt config/smoke/config_candidate.txt config/smoke/config_ranking.txt`.
 
@@ -35,8 +35,8 @@ Fast end-to-end check (minutes, not hours) with the exact same settings as the f
 three stages, in pipeline order, from the same launchers and the same configs:
 
 ```
-python run_stages.py ranking=config/methods/config_slm_context.txt
-python run_stages.py preprocessing=cfg1.txt candidate=cfg2.txt
+python run_stages.py ranking=config/config_ranking.txt
+python run_stages.py preprocessing=config/config_preprocessing.txt candidate=config/config_candidate.txt
 ```
 
 Useful when only the ranking stage has to be rerun on candidates that already
@@ -54,4 +54,4 @@ They are ordered cheapest first, self-consistency last, since it samples `SC_SAM
 
 ## Experiments vs. full run
 
-The `config/` folder here is only the chained *best* setting. The ablations and comparisons reported in the thesis live in each stage's own `config/` subfolders (`Preprocessing/config/`, `Candidate_Retrieval/config/`, `Ranking/config/`), each with its own README; their outputs are collected in `Evaluator/Testing_data/`.
+The `config/` folder here contains the chained reference example. The ablations and comparisons reported in the thesis live in each stage's own `config/` subfolders (`Preprocessing/config/`, `Candidate_Retrieval/config/`, `Ranking/config/`), each with its own README; their outputs are collected locally in `Evaluator/Testing_data/`, which is ignored by Git.
